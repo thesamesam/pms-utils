@@ -1,0 +1,73 @@
+# GitHub actions workflow.
+# https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions
+
+name: Build+Test CI
+
+on: [pull_request, push]
+
+jobs:
+  make:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        cc: [gcc, clang]
+        bb: [meson] # TODO: muon?
+        sanitizer: [none, address, undefined]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
+      BB: ${{ matrix.bb }}
+      SANITIZER: ${{ matrix.sanitizer }}
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+        sudo apt-get update
+        # TODO: this breaks finding pybind11, speak to eli (pip line doesn't help, with or without global)
+        #sudo apt-get install -y ninja-build pkgconf libboost-all-dev meson python3-pybind11 pybind11-dev
+        #sudo pip3 install pybind11[global]
+        sudo apt-get install -y ninja-build cmake pkgconf libboost-all-dev python3-dev meson gcc-13 #python3-pybind11 pybind11-dev
+        sudo pip3 install pybind11[global]
+
+        case "$BB" in
+          meson)
+            #sudo pip3 install meson
+            ;;
+          muon)
+            wget https://muon.build/releases/edge/muon-edge-amd64-linux-static -O muon
+            chmod +x muon
+            sudo install -Dm755 muon /usr/local/bin/muon
+            ;;
+        esac
+    - uses: actions/checkout@v4
+    - run: |
+        #export PKG_CONFIG_PATH="/usr/lib/$(uname -m)-linux-gnu/pkgconfig/"
+        case "$BB" in
+          muon)
+            alias ninja="muon samu"
+            ;;
+        esac
+
+        export CC=gcc-13 CXX=g++-13
+
+        "$BB" setup -Db_sanitize="${SANITIZER}" build || { cat pms-utils/build/meson-logs/meson-log.txt ; exit 1 ; }
+        ninja -C build
+        ( cd build && "$BB" test; )
+
+  build-macos:
+    strategy:
+      matrix:
+        os: [macos-latest]
+        cc: [clang]
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
+    steps:
+    - name: Install dependencies
+      run: brew install meson ninja boost pybind11
+    - uses: actions/checkout@v4
+    - run: |
+        meson setup build
+        ninja -C build
+        ( cd build && meson test)
