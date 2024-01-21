@@ -49,7 +49,7 @@ jobs:
 
         export CC=gcc-13 CXX=g++-13
 
-        "$BB" setup -Db_sanitize="${SANITIZER}" build || { cat /home/builder/work/pms-utils/pms-utils/build/meson-logs/meson-log.txt ; exit 1 ; }
+        "$BB" setup -Db_sanitize="${SANITIZER}" build || { cat /home/runner/work/pms-utils/pms-utils/build/meson-logs/meson-log.txt ; exit 1 ; }
         ninja -C build
         ( cd build && "$BB" test; )
 
